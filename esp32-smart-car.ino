@@ -1,6 +1,15 @@
 #include <Arduino.h>
+#include <ESP32Servo.h>
 #include "BluetoothSerial.h"
 BluetoothSerial SerialBT;
+
+Servo servoX;
+Servo servoY;
+
+int angleX = 90;
+int angleY = 90;
+
+const int stepSize = 5;  // seberapa besar gerakan tiap command
 
 const int enPin = 25;  // ENA semua motor gabung ke sini (PWM)
 const int pwmChannel = 0;
@@ -34,6 +43,12 @@ void setup() {
   SerialBT.begin("ESP32Robot");
   Serial.println("Bluetooth nyambung");
 
+  servoX.attach(18);
+  servoY.attach(19);
+
+  servoX.write(angleX);
+  servoY.write(angleY);
+
   // Set semua pin motor
   pinMode(RKA_MAJU, OUTPUT);
   pinMode(RKA_MUNDUR, OUTPUT);
@@ -55,9 +70,28 @@ void setup() {
 }
 
 void loop() {
+  static String input = "";
   if (SerialBT.available()) {
     char cmd = SerialBT.read();
     Serial.println(cmd);
+
+    if (cmd == '#') {
+      input = "#";
+    } else if (input.startsWith("#")) {
+      if (isDigit(cmd)) {
+        input += cmd; // tambah angka
+      } else {
+        // Kalau bukan angka, proses input
+        int newSpeed = input.substring(1).toInt();
+        valSpeed = constrain(newSpeed, 0, 255);
+        ledcWrite(enPin, valSpeed);
+        SerialBT.print("Speed set: ");
+        SerialBT.print((valSpeed * 100) / 255);
+        SerialBT.println("%");
+        input = ""; // reset input
+      }
+      // continue; // skip switch(cmd)
+    }
 
     switch (cmd) {
       case 'F':
@@ -100,17 +134,72 @@ void loop() {
         honk();
         SerialBT.print("Honk");
         break;
-      case 'U':
-        digitalWrite(ledPin, HIGH);
-        SerialBT.print("Headlight ON");
-        break;
-      case 'u':
-        digitalWrite(ledPin, LOW);
-        SerialBT.print("Headlight OFF");
-        break;
+      // case 'U':
+      //   digitalWrite(ledPin, HIGH);
+      //   SerialBT.print("Headlight ON");
+      //   break;
+      // case 'u':
+      //   digitalWrite(ledPin, LOW);
+      //   SerialBT.print("Headlight OFF");
+      //   break;
       case 'Z':
         setSpeed();
         SerialBT.print("Speed set: " + String((valSpeed * 100) / 255) + "%");
+        break;
+      case 'A':  // analog atas → naikkan servo Y
+        angleY = constrain(angleY - stepSize, 0, 180);
+        servoY.write(angleY);
+        SerialBT.println("Servo Y ↑ : " + String(angleY));
+        break;
+
+      case 'E':  // analog bawah → turunkan servo Y
+        angleY = constrain(angleY + stepSize, 0, 180);
+        servoY.write(angleY);
+        SerialBT.println("Servo Y ↓ : " + String(angleY));
+        break;
+
+      case 'U':  // analog kiri → geser servo X ke kiri
+        angleX = constrain(angleX - stepSize, 0, 180);
+        servoX.write(angleX);
+        SerialBT.println("Servo X ← : " + String(angleX));
+        break;
+
+      case 'C':  // analog kanan → geser servo X ke kanan
+        angleX = constrain(angleX + stepSize, 0, 180);
+        servoX.write(angleX);
+        SerialBT.println("Servo X → : " + String(angleX));
+        break;
+
+      // Diagonal gerak (combo)
+      case 'M':  // kanan atas
+        angleX = constrain(angleX + stepSize, 0, 180);
+        angleY = constrain(angleY - stepSize, 0, 180);
+        servoX.write(angleX);
+        servoY.write(angleY);
+        SerialBT.println("Servo ↗ : X=" + String(angleX) + ", Y=" + String(angleY));
+        break;
+
+      case 'D':  // kanan bawah
+        angleX = constrain(angleX + stepSize, 0, 180);
+        angleY = constrain(angleY + stepSize, 0, 180);
+        servoX.write(angleX);
+        servoY.write(angleY);
+        SerialBT.println("Servo ↘ : X=" + String(angleX) + ", Y=" + String(angleY));
+        break;
+
+      case 'V':  // kiri bawah
+        angleX = constrain(angleX - stepSize, 0, 180);
+        angleY = constrain(angleY + stepSize, 0, 180);
+        servoX.write(angleX);
+        servoY.write(angleY);
+        SerialBT.println("Servo ↙ : X=" + String(angleX) + ", Y=" + String(angleY));
+        break;
+      case 'T':  // kiri atas ↖️
+        angleX = constrain(angleX - stepSize, 0, 180);
+        angleY = constrain(angleY - stepSize, 0, 180);
+        servoX.write(angleX);
+        servoY.write(angleY);
+        SerialBT.println("Servo ↖ : X=" + String(angleX) + ", Y=" + String(angleY));
         break;
       default:
         break;
